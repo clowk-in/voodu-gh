@@ -1,0 +1,76 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+          shellcheck -e SC1090,SC1091 scripts/*.sh
+          python3 -c "import yaml; yaml.safe_load(open('action.yml'))"
+
+      # Three kinds of tag reach this workflow, and only one of them should
+      # move the major pointer:
+      #   v1.2.0      a release      -> publish, and move v1 here
+      #   v1.2.0-rc.1 a prerelease   -> publish, but leave v1 alone, so
+      #                                 anyone tracking @v1 only ever lands
+      #                                 on a finished release
+      #   v1          the pointer    -> nothing to do; this workflow is what
+      #                                 writes it, and re-releasing it would
+      #                                 loop
+      - name: Classify the tag
+        id: tag
+        run: |
+          tag="$GITHUB_REF_NAME"
+
+          case "$tag" in
+            *.*.*)
+              echo "release=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::notice::'${tag}' is not a semver tag; nothing to publish."
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+          case "$tag" in
+            *-*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+          echo "major=${tag%%.*}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        if: steps.tag.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+        run: |
+          flags=(--generate-notes)
+
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
+
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}"
+
+      - name: Move the major tag
+        if: steps.tag.outputs.release == 'true' && steps.tag.outputs.prerelease == 'false'
+        env:
+          MAJOR: ${{ steps.tag.outputs.major }}
+        run: |
+          git tag -f "$MAJOR" "$GITHUB_SHA"
+          git push -f origin "refs/tags/${MAJOR}"
+
+          echo "::notice::${MAJOR} now points at ${GITHUB_REF_NAME}."

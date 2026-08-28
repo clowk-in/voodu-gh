@@ -306,6 +306,27 @@ Hosted runners need nothing — the whole machine is destroyed.
 - `actions/checkout` before this action, when the manifests come from the repo.
 - Linux or macOS runners. The CLI ships `amd64` and `arm64` builds for both.
 
+## Versioning
+
+Releases follow semantic versioning. Every release is published under its
+exact tag, and the major tag moves to the newest compatible release — so you
+choose how much movement you want:
+
+| Reference | What you get |
+|---|---|
+| `clowk-in/voodu-gh@v1.0.0` | immutable; you bump it yourself |
+| `clowk-in/voodu-gh@v1` | minor and patch releases arrive on their own |
+| `clowk-in/voodu-gh@<full sha>` | immutable and unforgeable |
+
+A tag can be moved by whoever owns the repository, so `@v1` is a statement of
+trust, not a guarantee. This action holds a key with shell access to your
+server — if that matters where you work, pin the full commit SHA, which is
+also what Dependabot and the OpenSSF guidance recommend for actions. It keeps
+updating the pin for you.
+
+Prereleases (`v1.2.0-rc.1`) are published, but never move `v1`. Anyone
+tracking the major tag only ever lands on a finished release.
+
 ## Links
 
 - [voodu.clowk.in](https://voodu.clowk.in/) — docs and install
