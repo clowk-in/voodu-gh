@@ -1,4 +1,7 @@
-# Shared helpers. Sourced, never executed.
+# shellcheck shell=bash
+#
+# Shared helpers. Sourced, never executed, so it carries a shell directive
+# rather than a shebang.
 
 # pick <explicit> <ambient-env-name> [default]
 #

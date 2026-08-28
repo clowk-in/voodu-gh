@@ -51,9 +51,17 @@ while IFS= read -r line; do
   # extension, .voodu/ lookup, directories walked recursively).
   case "$line" in
     *'*'*|*'?'*|*'['*)
-      shopt -s nullglob
-      matches=($line)
-      shopt -u nullglob
+      # compgen expands the pattern and prints one path per line, so a match
+      # containing a space stays one entry — plain array assignment would
+      # word-split it into two broken paths. Read it with a loop rather than
+      # mapfile, which macOS's bash 3.2 does not have.
+      matches=()
+
+      while IFS= read -r match; do
+        [ -n "$match" ] || continue
+
+        matches+=("$match")
+      done < <(compgen -G "$line" || true)
 
       if [ ${#matches[@]} -eq 0 ]; then
         die "manifest pattern '${line}' matched no files."
