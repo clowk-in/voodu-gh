@@ -34,7 +34,10 @@ case "$HOST" in
     fi
     ;;
   *)
-    [ -n "$USER_INPUT" ] || die "host '${HOST}' has no user. Write it as user@hostname, or pass 'user:' (or VOODU_USER) alongside."
+    # No default user, deliberately. voodu's own remote parser refuses a
+    # target without one, and guessing root would turn a missing input into
+    # an SSH auth failure mid-run instead of this message before we connect.
+    [ -n "$USER_INPUT" ] || die "host '${HOST}' names no user, and there is no default. Write the target as user@hostname (e.g. ubuntu@${HOST}, deploy@${HOST}, root@${HOST}), or keep the address alone and pass 'user:' (or VOODU_USER) beside it."
 
     HOST="${USER_INPUT}@${HOST}"
     ;;

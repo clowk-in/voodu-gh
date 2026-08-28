@@ -81,6 +81,14 @@ env:
   VOODU_HOST: ${{ secrets.VOODU_HOST }}
 ```
 
+**There is no default user.** A bare address fails before anything connects,
+naming the forms that would work — the action never guesses `root`. That
+matches voodu itself, whose remote parser refuses a target without a user,
+and it keeps a forgotten input from turning into an SSH authentication error
+halfway through a run. Which user is right depends on the image: `root` on a
+DigitalOcean droplet, `ubuntu` or `ec2-user` on AWS, or whatever user the
+voodu installer set up for deploys.
+
 A `host` that already names a user wins, and the `user` input is ignored with
 a warning. The port never belongs in `host` — voodu reads everything after
 `:` as a path to a key — so use `port:` instead.
@@ -90,7 +98,7 @@ a warning. The port never belongs in `host` — voodu reads everything after
 | Input | Env fallback | Default | Description |
 |---|---|---|---|
 | `manifests` | `VOODU_MANIFESTS` | — | Paths, one per line (commas work too). Files, directories, or globs. |
-| `host` | `VOODU_HOST` | — | SSH target: `user@hostname`, or just the hostname when `user` is set. |
+| `host` | `VOODU_HOST` | — | SSH target: `user@hostname`, or the hostname alone when `user` is set. No default user. |
 | `user` | `VOODU_USER` | — | SSH user, when `host` carries only a hostname. |
 | `ssh-key` | `VOODU_SSH_KEY` | — | Private key with access to the host. |
 | `known-hosts` | `VOODU_KNOWN_HOSTS` | — | Pinned host key from `ssh-keyscan`. Strongly recommended. |
