@@ -1,0 +1,139 @@
+name: 'Voodu'
+description: 'Deploy to a Voodu server by running `vd apply` over SSH.'
+author: 'Clowk'
+# The name above is only the label shown in the Marketplace and the run UI.
+# Workflows reference this action by its repository path, so
+# `uses: clowk-in/voodu-gh` resolves against github.com/clowk-in/voodu-gh and
+# nothing else.
+
+branding:
+  icon: 'upload-cloud'
+  color: 'purple'
+
+# Every input falls back to an environment variable, so shared values can be
+# declared ONCE at the workflow/job level and every `uses:` of this action
+# picks them up. An explicit `with:` always wins over the environment.
+#
+#   env:
+#     VOODU_HOST:        ${{ secrets.VOODU_HOST }}
+#     VOODU_SSH_KEY:     ${{ secrets.VOODU_SSH_KEY }}
+#     VOODU_KNOWN_HOSTS: ${{ secrets.VOODU_KNOWN_HOSTS }}
+#
+#   steps:
+#     - uses: clowk-in/voodu-gh@v1
+#       with: { manifests: infra/web.hcl }
+inputs:
+  manifests:
+    description: |
+      Manifest paths, one per line (commas also accepted). A path may be a
+      file, a directory (walked recursively), or a glob. Extensions are
+      optional — `vd` resolves .hcl/.voodu/.vdu/.vd itself.
+      Env fallback: VOODU_MANIFESTS
+    required: false
+  host:
+    description: |
+      SSH target. Either the full 'user@hostname', or just the hostname when
+      'user' is given separately — which keeps the user readable in the
+      workflow and leaves only the address as a secret.
+      Env fallback: VOODU_HOST
+    required: false
+  user:
+    description: 'SSH user, when host carries only a hostname. Env fallback: VOODU_USER'
+    required: false
+    default: ''
+  ssh-key:
+    description: 'Private SSH key with access to the host. Env fallback: VOODU_SSH_KEY'
+    required: false
+  known-hosts:
+    description: |
+      Pinned host key(s), from `ssh-keyscan -H <host>`. Strongly recommended:
+      without it the action falls back to trust-on-first-use, which on an
+      ephemeral runner accepts ANY key and is MITM-able.
+      Env fallback: VOODU_KNOWN_HOSTS
+    required: false
+  port:
+    description: 'SSH port. Env fallback: VOODU_PORT'
+    required: false
+    default: ''
+  version:
+    description: |
+      voodu CLI version to install (e.g. v0.9.3). Empty resolves the latest
+      release. Pinning is recommended for reproducible deploys.
+      Env fallback: VOODU_VERSION
+    required: false
+    default: ''
+  working-directory:
+    description: 'Directory to run from. Env fallback: VOODU_WORKDIR'
+    required: false
+    default: ''
+  remote-name:
+    description: 'Git remote name used to carry the SSH target. Env fallback: VOODU_REMOTE_NAME'
+    required: false
+    default: ''
+  dry-run:
+    description: |
+      When true, run `vd diff` instead of `vd apply` — the plan, with nothing
+      applied. Use it on pull requests. Env fallback: VOODU_DRY_RUN
+    required: false
+    default: ''
+  cache:
+    description: 'Cache the CLI binary between runs. Env fallback: VOODU_CACHE'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'Token used to resolve the latest release (avoids anonymous API rate limits).'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: 'The voodu CLI version that ran.'
+    value: ${{ steps.resolve.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      run: bash "${GITHUB_ACTION_PATH}/scripts/resolve.sh"
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - id: cache
+      if: ${{ steps.resolve.outputs.cache-enabled == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.resolve.outputs.dir }}
+        key: ${{ steps.resolve.outputs.cache-key }}
+
+    - id: install
+      shell: bash
+      run: bash "${GITHUB_ACTION_PATH}/scripts/install.sh"
+      env:
+        VD_VERSION: ${{ steps.resolve.outputs.version }}
+        VD_OS: ${{ steps.resolve.outputs.os }}
+        VD_ARCH: ${{ steps.resolve.outputs.arch }}
+        VD_DIR: ${{ steps.resolve.outputs.dir }}
+
+    - id: ssh
+      shell: bash
+      run: bash "${GITHUB_ACTION_PATH}/scripts/ssh.sh"
+      env:
+        INPUT_HOST: ${{ inputs.host }}
+        INPUT_USER: ${{ inputs.user }}
+        INPUT_SSH_KEY: ${{ inputs.ssh-key }}
+        INPUT_KNOWN_HOSTS: ${{ inputs.known-hosts }}
+        INPUT_PORT: ${{ inputs.port }}
+
+    - id: apply
+      shell: bash
+      run: bash "${GITHUB_ACTION_PATH}/scripts/apply.sh"
+      env:
+        VD_VERSION: ${{ steps.resolve.outputs.version }}
+        INPUT_MANIFESTS: ${{ inputs.manifests }}
+        INPUT_WORKDIR: ${{ inputs.working-directory }}
+        INPUT_REMOTE_NAME: ${{ inputs.remote-name }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        VD_HOST: ${{ steps.ssh.outputs.host }}
+        VOODU_SSH_IDENTITY: ${{ steps.ssh.outputs.identity }}
